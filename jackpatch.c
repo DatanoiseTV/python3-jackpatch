@@ -1190,11 +1190,11 @@ initjackpatch(void) {
 
   PortType.tp_new = PyType_GenericNew;
   if (PyType_Ready(&ClientType) < 0)
-      return 1;
+      return NULL;
   if (PyType_Ready(&TransportType) < 0)
-      return 1;
+      return NULL;
   if (PyType_Ready(&PortType) < 0)
-      return 1;
+      return NULL;
 
   m = PyModule_Create(&jackpatch);
   if (m == NULL)

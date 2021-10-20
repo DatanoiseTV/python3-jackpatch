@@ -151,7 +151,7 @@ static PyObject *
 Client_open(Client *self) {
   if (self->_client == NULL) {
     jack_status_t status;
-    self->_client = jack_client_open(PyString_AsString(self->name), 
+    self->_client = jack_client_open(PyUnicode_AsUTF8(self->name), 
       JackNoStartServer, &status);
     if ((status & JackServerFailed) != 0) {
       _error("%s", "Failed to connect to the JACK server");
@@ -411,7 +411,7 @@ Client_get_ports(Client *self, PyObject *args, PyObject *kwds) {
     }
     Port *port = (Port *)Port_new(&PortType, NULL, NULL);
     if (port != NULL) {
-      PyObject *name = PyString_FromString(ports[i]);
+      PyObject *name = PyUnicode_FromString(ports[i]);
       Port_init(port, Py_BuildValue("(O,S)", self, name), Py_BuildValue("{}"));
       Py_XDECREF(name);
       if (PyList_Append(return_list, (PyObject *)port) < 0) {
@@ -438,8 +438,8 @@ Client_connect(Client *self, PyObject *args, PyObject *kwds) {
   Client_activate(self);
   if (self->is_active != Py_True) return(NULL);
   int result = jack_connect(self->_client, 
-    PyString_AsString(source->name), 
-    PyString_AsString(destination->name));
+    PyUnicode_AsUTF8(source->name), 
+    PyUnicode_AsUTF8(destination->name));
   if ((result == 0) || (result == EEXIST)) Py_RETURN_TRUE;
   else {
     _warn("Failed to connect JACK ports (error %i)", result);
@@ -459,8 +459,8 @@ Client_disconnect(Client *self, PyObject *args, PyObject *kwds) {
   Client_activate(self);
   if (self->is_active != Py_True) return(NULL);
   int result = jack_disconnect(self->_client, 
-    PyString_AsString(source->name), 
-    PyString_AsString(destination->name));
+    PyUnicode_AsUTF8(source->name), 
+    PyUnicode_AsUTF8(destination->name));
   if ((result == 0) || (result == EEXIST)) Py_RETURN_TRUE;
   else {
     _warn("Failed to disconnect JACK ports (error %i)", result);
@@ -499,7 +499,6 @@ Client_dealloc(Client* self) {
     message = next;
   }
   Py_XDECREF(self->name);  
-  self->ob_type->tp_free((PyObject*)self);
 }
 
 static PyMemberDef Client_members[] = {
@@ -604,7 +603,6 @@ Transport_init(Transport *self, PyObject *args, PyObject *kwds) {
 static void
 Transport_dealloc(Transport* self) {
   Py_XDECREF(self->client);  
-  self->ob_type->tp_free((PyObject*)self);
 }
 
 // get the current time of the transport
@@ -768,7 +766,6 @@ Port_dealloc(Port* self) {
   Py_XDECREF(self->name);
   Py_XDECREF(self->client);
   Py_XDECREF(self->flags);
-  self->ob_type->tp_free((PyObject*)self);
 }
 
 static PyObject *
@@ -840,7 +837,7 @@ Port_init(Port *self, PyObject *args, PyObject *kwds) {
   }
   // store the actual name of the port
   tmp = self->name;
-  self->name = PyString_FromString(jack_port_name(self->_port));
+  self->name = PyUnicode_FromString(jack_port_name(self->_port));
   Py_XDECREF(tmp);
   // store the actual flags of the port
   tmp = self->flags;
@@ -888,7 +885,7 @@ Port_send(Port *self, PyObject *args) {
   unsigned char *mdata = message->data;
   long value;
   for (i = 0; i < bytes; i++) {
-    value = PyInt_AsLong(PySequence_ITEM(data, i));
+    value = PyLong_AsLong(PySequence_ITEM(data, i));
     if ((value == -1) && (PyErr_Occurred())) return(NULL);
     *mdata = (unsigned char)(value & 0xFF);
     mdata++;
@@ -973,7 +970,7 @@ Port_receive(Port *self) {
       unsigned char *c = message->data;
       size_t i;
       for (i = 0; i < bytes; i++) {
-        PyList_SET_ITEM(data, i, PyInt_FromLong(*c++));
+        PyList_SET_ITEM(data, i, PyLong_FromLong(*c++));
       }
       PyObject *tuple = Py_BuildValue("(O,d)", data, time);
       Py_DECREF(data);
@@ -1088,7 +1085,7 @@ Port_get_connections(Port *self) {
   for (i = 0; ports[i]; ++i) {
     Port *port = (Port *)Port_new(&PortType, NULL, NULL);
     if (port != NULL) {
-      PyObject *name = PyString_FromString(ports[i]);
+      PyObject *name = PyUnicode_FromString(ports[i]);
       Port_init(port, Py_BuildValue("(O,S)", client, name), Py_BuildValue("{}"));
       Py_XDECREF(name);
       if (PyList_Append(return_list, (PyObject *)port) < 0) {
@@ -1175,6 +1172,15 @@ static PyMethodDef jackpatch_methods[] = {
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
+static struct PyModuleDef jackpatch =
+{
+  PyModuleDef_HEAD_INIT,
+  "jackpatch", /* name of module */
+  NULL, /* module documentation, may be NULL */
+  -1,   /* size of per-interpreter state of the module, or -1 if the module keeps state in global variables. */
+  jackpatch_methods
+};
+
 #ifndef PyMODINIT_FUNC	/* declarations for DLL import/export */
 #define PyMODINIT_FUNC void
 #endif
@@ -1184,14 +1190,15 @@ initjackpatch(void) {
 
   PortType.tp_new = PyType_GenericNew;
   if (PyType_Ready(&ClientType) < 0)
-      return;
+      return 1;
   if (PyType_Ready(&TransportType) < 0)
-      return;
+      return 1;
   if (PyType_Ready(&PortType) < 0)
-      return;
+      return 1;
 
-  m = Py_InitModule3("jackpatch", jackpatch_methods,
-                     "A Pythonic wrapper for the JACK audio connection kit's MIDI and patchbay functionality");
+  m = PyModule_Create(&jackpatch);
+  if (m == NULL)
+    return NULL;
 
   JackError = PyErr_NewException("jackpatch.JackError", NULL, NULL);
   Py_INCREF(JackError);

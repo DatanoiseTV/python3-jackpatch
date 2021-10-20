@@ -1,7 +1,7 @@
 jackpatch
 ====
 
-This is a Python 2 module that exposes some of the functionality of the 
+This is a Python 3 module that exposes some of the functionality of the 
 [JACK Audio Connection Kit](http://jackaudio.org/). Since JACK is a realtime 
 audio server and Python isn't going to be the best at audio processing at 
 realtime speeds, this module only exposes JACK functionality that either doesn't 
@@ -16,7 +16,7 @@ The module is written in C using Python's basic API. You'll need JACK installed
 with header files in place, a C compiler, and Python setuptools. Once that's in
 place you should be able to run this from the directory this file is in:
 
-    sudo python setup.py install
+    sudo python3 setup.py install
 
 It's been tested on Linux and FreeBSD, and should be very portable, but your 
 mileage may vary.
